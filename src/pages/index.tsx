@@ -8,6 +8,8 @@ const Home: NextPage = () => {
   const router = useRouter();
   const { name1, setName1, setIsOwner } = useUserStore();
 
+  // TODO: CLEAR ON INDEX
+
   const signupMutation = trpc.gameRouter.signup.useMutation({
     onSuccess: (data) => {
       setIsOwner(true);
