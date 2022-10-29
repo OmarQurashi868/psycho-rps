@@ -8,6 +8,9 @@ import { env } from "../../../env/server.mjs";
 export default createNextApiHandler({
   router: appRouter,
   createContext,
+  batching: {
+    enabled: false,
+  },
   onError:
     env.NODE_ENV === "development"
       ? ({ path, error }) => {
