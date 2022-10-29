@@ -20,6 +20,7 @@ export const gameRouter = router({
     .mutation(async ({ input }) => {
       const nanoid = customAlphabet("1234567890", 6);
       const roomId = await nanoid();
+      console.log("i'm in signup")
       return {
         roomId: roomId,
       };
@@ -40,7 +41,7 @@ export const gameRouter = router({
         cluster: "eu",
         useTLS: true,
       });
-      pusher.trigger(input.roomId, Events.USER_JOIN, {
+      await pusher.trigger(input.roomId, Events.USER_JOIN, {
         name: input.name,
         isOwner: input.isOwner,
       });
@@ -62,7 +63,7 @@ export const gameRouter = router({
         cluster: "eu",
         useTLS: true,
       });
-      pusher.trigger(input.roomId, Events.USER_PLAY, {
+      await pusher.trigger(input.roomId, Events.USER_PLAY, {
         name: input.name,
         isOwner: input.isOwner,
         play: input.play
