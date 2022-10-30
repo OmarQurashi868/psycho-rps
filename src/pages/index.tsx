@@ -3,23 +3,37 @@ import { useRouter } from "next/router";
 import Head from "next/head";
 import { trpc } from "../utils/trpc";
 import { useUserStore } from "../utils/userStore";
+import { useEffect } from "react";
+import Pusher from "pusher-js";
+import { env } from "../env/client.mjs";
 
 const Home: NextPage = () => {
   const router = useRouter();
-  const { name1, setName1, setIsOwner } = useUserStore();
+  const { players, setPlayerNames, setCurrentPlayer, clearAll } =
+    useUserStore();
 
-  // TODO: CLEAR ON INDEX
+  useEffect(() => {
+    // TODO: CLEAR ON INDEX
+    if (localStorage.getItem("lastRoomId")) {
+      const pusher = new Pusher(env.NEXT_PUBLIC_APP_KEY, { cluster: "eu" });
+      pusher.unbind_all();
+      pusher.unsubscribe(localStorage.getItem("lastRoomId")!);
+    }
+    localStorage.removeItem("lastRoomId");  
+    clearAll();
+    setPlayerNames(0, "");
+  }, []);
 
   const signupMutation = trpc.gameRouter.signup.useMutation({
     onSuccess: (data) => {
-      setIsOwner(true);
+      setCurrentPlayer(0);
       router.push(`/${data.roomId}`);
     },
   });
 
   const signupHandler = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (name1) signupMutation.mutate({ name: name1 });
+    if (players[0].name) signupMutation.mutate({ name: players[0].name });
   };
 
   return (
@@ -36,12 +50,12 @@ const Home: NextPage = () => {
         </h1>
         <form className="flex flex-col gap-8" onSubmit={signupHandler}>
           <input
-            value={name1}
+            value={players[0].name}
             id="name"
             name="name"
             required
             maxLength={32}
-            onChange={(e) => setName1(e.currentTarget.value)}
+            onChange={(e) => setPlayerNames(0, e.currentTarget.value)}
             className="input-bordered input w-full max-w-xs"
           />
           <button

@@ -7,6 +7,8 @@ import { Events } from "../../../constants/events";
 // const Pusher = require("pusher");
 import Pusher from "pusher";
 
+// TODO: Connect to database for announcing lobby status and limit players
+
 export const gameRouter = router({
   hello: publicProcedure
     .input(z.object({ text: z.string().nullish() }).nullish())
@@ -20,7 +22,6 @@ export const gameRouter = router({
     .mutation(async ({ input }) => {
       const nanoid = customAlphabet("1234567890", 6);
       const roomId = await nanoid();
-      console.log("i'm in signup")
       return {
         roomId: roomId,
       };
@@ -30,7 +31,7 @@ export const gameRouter = router({
       z.object({
         name: z.string().max(32),
         roomId: z.string().length(6),
-        isOwner: z.boolean(),
+        currentPlayer: z.number().min(0).max(1),
       })
     )
     .mutation(async ({ input }) => {
@@ -43,7 +44,7 @@ export const gameRouter = router({
       });
       await pusher.trigger(input.roomId, Events.USER_JOIN, {
         name: input.name,
-        isOwner: input.isOwner,
+        playerNumber: input.currentPlayer,
       });
     }),
   play: publicProcedure
@@ -51,8 +52,8 @@ export const gameRouter = router({
       z.object({
         name: z.string().max(32),
         roomId: z.string().length(6),
-        isOwner: z.boolean(),
-        play: z.enum(["rock", "paper", "scissors"])
+        currentPlayer: z.number().min(0).max(1),
+        play: z.enum(["rock", "paper", "scissors"]),
       })
     )
     .mutation(async ({ input }) => {
@@ -65,8 +66,8 @@ export const gameRouter = router({
       });
       await pusher.trigger(input.roomId, Events.USER_PLAY, {
         name: input.name,
-        isOwner: input.isOwner,
-        play: input.play
+        playerNumber: input.currentPlayer,
+        play: input.play,
       });
     }),
 });

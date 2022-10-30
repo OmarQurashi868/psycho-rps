@@ -10,8 +10,14 @@ import { Events } from "../constants/events";
 const Room = () => {
   const router = useRouter();
   const { roomId } = router.query;
-  const { name1, setName1, name2, setName2, isOwner, ...playStore } =
-    useUserStore();
+  const {
+    players,
+    setPlayerNames,
+    currentPlayer,
+    setCurrentPlayer,
+    setPlayerPlay,
+    clearPlayersPlays,
+  } = useUserStore();
 
   const pusherMemo = useMemo(() => {
     if (typeof roomId == "string") {
@@ -23,71 +29,108 @@ const Room = () => {
 
   const joinMutation = trpc.gameRouter.join.useMutation();
 
+  // TODO: Fix screen disappearing on alert
+  // TODO: Refactor to allow asking for lobby info and enable spectating when joining 2 or more players
+
   useEffect(() => {
-    // Pusher.logToConsole = true;
     if (pusherMemo) {
+      if (typeof roomId == "string") localStorage.setItem("lastRoomId", roomId)
       pusherMemo.channel.bind(Events.USER_JOIN, (data: any) => {
-        if (!data.isOwner) {
-          setName2(data.name);
-          if (typeof roomId == "string" && name1)
-            joinMutation.mutate({ roomId: roomId, name: name1, isOwner: true });
-        } else {
-          setName1(data.name);
+        
+        // on player 1 reciving join event
+        if (!currentPlayer && typeof roomId == "string" && !players[1].name) {
+          setPlayerNames(1, data.name);
+          joinMutation.mutate({
+            roomId: roomId,
+            name: players[currentPlayer].name!,
+            currentPlayer: currentPlayer,
+          });
         }
+
+        // on player 2 reciving join eventreciving join 
+        if (!data.playerNumber && typeof roomId == "string") {
+
+          setPlayerNames(0, data.name);
+        }
+
+        // if (data.playerNumber != currentPlayer) {
+        //   if (data.playerNumber == 0) console.log(data.name)
+        //   setPlayerNames(data.playerNumber, data.name);
+
+        //   if (
+        //     typeof roomId == "string" &&
+        //     currentPlayer == 0 &&
+        //     players[currentPlayer].name
+        //   ) {
+        //     joinMutation.mutate({
+        //       roomId: roomId,
+        //       name: players[currentPlayer].name!,
+        //       currentPlayer: currentPlayer,
+        //     });
+        //   }
+        // }
       });
       pusherMemo.channel.bind(Events.USER_PLAY, (data: any) => {
-        playStore.setPlayerPlay(data.isOwner ? 1 : 2, data.play);
-        console.log(data.play);
+        setPlayerPlay(data.playerNumber, data.play);
       });
     }
   }, [roomId]);
 
+  const playerWin = (player: 0 | 1) => {
+    alert(`${players[player].name} WINS!`);
+  };
+  const playerDraw = () => {
+    alert("DRAW!!!");
+  };
+
   useEffect(() => {
-    if (playStore.player1play && playStore.player2play) {
-      if (playStore.player1play == playStore.player2play) {
-        alert("DRAW!!!");
-      }
-      if (playStore.player1play == "rock" && playStore.player2play == "scissors") {
-        alert(`${name1} WINS!`)
-      }
-      if (playStore.player1play == "paper" && playStore.player2play == "rock") {
-        alert(`${name1} WINS!`)
-      }
-      if (playStore.player1play == "scissors" && playStore.player2play == "paper") {
-        alert(`${name1} WINS!`)
+    if (players[0].play && players[1].play) {
+      if (players[0].play == players[1].play) {
+        playerDraw();
       }
 
-      if (playStore.player2play == "rock" && playStore.player1play == "scissors") {
-        alert(`${name2} WINS!`)
+      const winSet = ["rock", "paper", "scissors"];
+      const loseSet = ["scissors", "rock", "paper"];
+
+      for (let i = 0; i < winSet.length; i++) {
+        if (players[0].play == winSet[i] && players[1].play == loseSet[i]) {
+          playerWin(0);
+          break;
+        }
+        if (players[1].play == winSet[i] && players[0].play == loseSet[i]) {
+          playerWin(1);
+          break;
+        }
       }
-      if (playStore.player2play == "paper" && playStore.player1play == "rock") {
-        alert(`${name2} WINS!`)
-      }
-      if (playStore.player2play == "scissors" && playStore.player1play == "paper") {
-        alert(`${name2} WINS!`)
-      }
-      
-      playStore.setPlayerPlay(1, undefined);
-      playStore.setPlayerPlay(2, undefined);
+
+      clearPlayersPlays();
     }
-  }, [playStore.player1play, playStore.player2play]);
+  }, [players[0].play, players[1].play]);
 
-  // TODO: playing against and disappearing buttons but make selection enabled
+  // TODO: playing against text and disappearing buttons but make selected button enabled
 
   const joinHandler = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (name2 && typeof roomId == "string")
-      joinMutation.mutate({ roomId: roomId, name: name2, isOwner: false });
+    setCurrentPlayer(1);
+    if (players[currentPlayer].name && typeof roomId == "string")
+      joinMutation.mutate({
+        roomId: roomId,
+        name: players[currentPlayer].name!,
+        currentPlayer: currentPlayer,
+      });
   };
 
   const { mutate: sendPlay } = trpc.gameRouter.play.useMutation();
   const pickPlay = (play: "rock" | "paper" | "scissors") => {
-    // playStore.setPlayerPlay(isOwner ? 1 : 2, play);
-    if (name1 && name2 && typeof roomId == "string")
+    if (
+      players[currentPlayer] &&
+      players[currentPlayer].name &&
+      typeof roomId == "string"
+    )
       sendPlay({
-        name: isOwner ? name1 : name2,
+        name: players[currentPlayer].name!,
         roomId,
-        isOwner,
+        currentPlayer,
         play,
       });
   };
@@ -116,23 +159,23 @@ const Room = () => {
             d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"
           />
         </svg>
-        {name1 ? (
+        {players[0].name ? (
           <>
-            {name1}
+            {players[0].name}
             <br />
-            {name2 ?? "Waiting for player..."}
+            {players[1].name ?? "Waiting for player..."}
             <span>{roomId}</span>
           </>
         ) : (
           <form className="flex flex-col gap-8" onSubmit={joinHandler}>
             <span>Joining room {roomId}</span>
             <input
-              value={name1}
+              value={players[1].name}
               id="name"
               name="name"
               required
               maxLength={32}
-              onChange={(e) => setName2(e.currentTarget.value)}
+              onChange={(e) => setPlayerNames(1, e.currentTarget.value)}
               className="input-bordered input w-full max-w-xs"
             />
             <button
@@ -144,32 +187,26 @@ const Room = () => {
             </button>
           </form>
         )}
-        {name1 && name2 && (
+        {players[0].name && players[1].name && (
           <div className="flex gap-3">
             <button
               className="btn-accent btn"
               onClick={() => pickPlay("rock")}
-              disabled={
-                isOwner ? !!playStore.player1play : !!playStore.player2play
-              }
+              disabled={!!players[currentPlayer].play}
             >
               ROCK
             </button>
             <button
               className="btn-secondary btn"
               onClick={() => pickPlay("paper")}
-              disabled={
-                isOwner ? !!playStore.player1play : !!playStore.player2play
-              }
+              disabled={!!players[currentPlayer].play}
             >
               PAPER
             </button>
             <button
               className="btn-primary btn"
               onClick={() => pickPlay("scissors")}
-              disabled={
-                isOwner ? !!playStore.player1play : !!playStore.player2play
-              }
+              disabled={!!players[currentPlayer].play}
             >
               SCISSORS
             </button>
