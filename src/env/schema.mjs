@@ -9,6 +9,7 @@ export const serverSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]),
   APP_ID: z.string(),
   APP_SECRET: z.string(),
+  DATABASE_URL: z.string(),
 });
 
 /**

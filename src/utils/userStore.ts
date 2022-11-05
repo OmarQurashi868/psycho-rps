@@ -1,41 +1,81 @@
+import { useMemo } from "react";
 import create from "zustand";
 
 type Play = "rock" | "paper" | "scissors" | undefined;
+
 type Player = {
+  userId?: string;
   name?: string;
+  score?: number;
   play?: Play;
 };
 
 type UserStoreType = {
   players: [Player, Player];
-  setPlayerNames: (player: 0 | 1, name: string) => void;
-  currentPlayer: 0 | 1;
-  setCurrentPlayer: (player: 0 | 1) => void;
+  setPlayer: (player: 0 | 1, data: Player) => void;
   setPlayerPlay: (player: 0 | 1, play: Play) => void;
-  clearPlayersPlays: () => void;
+
+  incrementPlayerScore: (player: 0 | 1) => void;
+  clearPlayerScore: (player: 0 | 1) => void;
+
+  isPlaying: 0 | 1 | 2;
+  setIsPlaying: (isPlaying: 0 | 1 | 2) => void;
+
+  myName: string;
+  setMyName: (name: string) => void;
+
+  clearAllPlays: () => void;
+  clearAllScores: () => void;
+
   clearAll: () => void;
 };
 
 export const useUserStore = create<UserStoreType>((set) => ({
   players: [{}, {}],
-  setPlayerNames: (player: 0 | 1, name: string) =>
+  setPlayer: (player: 0 | 1, data: Player) =>
     set((s) => {
       const newPlayers = s.players;
-      newPlayers[player].name = name;
+      Object.entries(data).forEach((entry) => {
+        const [key, value] = entry;
+        newPlayers[player][key] = value;
+      });
       return { players: newPlayers };
     }),
-  currentPlayer: 1,
-  setCurrentPlayer: (player: 0 | 1) => set({ currentPlayer: player }),
-  playersPlays: { 1: undefined, 2: undefined },
   setPlayerPlay: (player: 0 | 1, play: Play) =>
     set((s) => {
       const newPlayers = s.players;
       newPlayers[player].play = play;
       return { players: newPlayers };
     }),
-  clearPlayersPlays: () =>
+
+  incrementPlayerScore: (player: 0 | 1) =>
+    set((s) => {
+      const newPlayers = s.players;
+      newPlayers[player].score = newPlayers[player].score || 0 + 1;
+      return { players: newPlayers };
+    }),
+  clearPlayerScore: (player: 0 | 1) =>
+    set((s) => {
+      const newPlayers = s.players;
+      newPlayers[player].score = 0;
+      return { players: newPlayers };
+    }),
+
+  isPlaying: 1,
+  setIsPlaying: (player: 0 | 1 | 2) => set({ isPlaying: player }),
+  playersPlays: { 1: undefined, 2: undefined },
+
+  myName: "",
+  setMyName: (name: string) => set({ myName: name }),
+
+  clearAllPlays: () =>
     set((s) => ({
       players: [{ name: s.players[0].name }, { name: s.players[1].name }],
     })),
-  clearAll: () => set({ players: [{}, {}], currentPlayer: undefined }),
+  clearAllScores: () =>
+    set((s) => ({
+      players: [{ name: s.players[0].name }, { name: s.players[1].name }],
+    })),
+
+  clearAll: () => set({ players: [{}, {}], isPlaying: 1 }),
 }));

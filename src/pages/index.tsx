@@ -9,31 +9,36 @@ import { env } from "../env/client.mjs";
 
 const Home: NextPage = () => {
   const router = useRouter();
-  const { players, setPlayerNames, setCurrentPlayer, clearAll } =
+  const { players, setPlayer, myName, setMyName, setIsPlaying, clearAll } =
     useUserStore();
 
+  // Clear all past game data
   useEffect(() => {
-    // TODO: CLEAR ON INDEX
     if (localStorage.getItem("lastRoomId")) {
       const pusher = new Pusher(env.NEXT_PUBLIC_APP_KEY, { cluster: "eu" });
       pusher.unbind_all();
       pusher.unsubscribe(localStorage.getItem("lastRoomId")!);
     }
-    localStorage.removeItem("lastRoomId");  
+    localStorage.removeItem("lastRoomId");
     clearAll();
-    setPlayerNames(0, "");
   }, []);
 
-  const signupMutation = trpc.gameRouter.signup.useMutation({
+  // On lobby creation
+  const createMutation = trpc.gameRouter.create.useMutation({
     onSuccess: (data) => {
-      setCurrentPlayer(0);
-      router.push(`/${data.roomId}`);
+      if (data.userId)
+        localStorage.setItem("userId", data.userId);
+      setIsPlaying(1);
+
+      router.push(`/${data.gameId}`);
     },
   });
 
+  // On form submit
   const signupHandler = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (players[0].name) signupMutation.mutate({ name: players[0].name });
+    const payload = localStorage.getItem("userId") || undefined;
+    createMutation.mutate({ name: myName, userId: payload });
   };
 
   return (
@@ -55,13 +60,13 @@ const Home: NextPage = () => {
             name="name"
             required
             maxLength={32}
-            onChange={(e) => setPlayerNames(0, e.currentTarget.value)}
+            onChange={(e) => setMyName(e.currentTarget.value)}
             className="input-bordered input w-full max-w-xs"
           />
           <button
             type="submit"
             className="btn"
-            disabled={signupMutation.isLoading}
+            disabled={createMutation.isLoading}
           >
             PLAY!
           </button>

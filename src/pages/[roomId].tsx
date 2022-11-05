@@ -16,9 +16,10 @@ const Room = () => {
     currentPlayer,
     setCurrentPlayer,
     setPlayerPlay,
-    clearPlayersPlays,
+    clearAllPlays: clearPlayersPlays,
   } = useUserStore();
 
+  // Connect websocket pusher
   const pusherMemo = useMemo(() => {
     if (typeof roomId == "string") {
       const pusher = new Pusher(env.NEXT_PUBLIC_APP_KEY, { cluster: "eu" });
@@ -29,9 +30,7 @@ const Room = () => {
 
   const joinMutation = trpc.gameRouter.join.useMutation();
 
-  // TODO: Fix screen disappearing on alert
-  // TODO: Refactor to allow asking for lobby info and enable spectating when joining 2 or more players
-
+  // On player join
   useEffect(() => {
     if (pusherMemo) {
       if (typeof roomId == "string") localStorage.setItem("lastRoomId", roomId)
@@ -52,23 +51,6 @@ const Room = () => {
 
           setPlayerNames(0, data.name);
         }
-
-        // if (data.playerNumber != currentPlayer) {
-        //   if (data.playerNumber == 0) console.log(data.name)
-        //   setPlayerNames(data.playerNumber, data.name);
-
-        //   if (
-        //     typeof roomId == "string" &&
-        //     currentPlayer == 0 &&
-        //     players[currentPlayer].name
-        //   ) {
-        //     joinMutation.mutate({
-        //       roomId: roomId,
-        //       name: players[currentPlayer].name!,
-        //       currentPlayer: currentPlayer,
-        //     });
-        //   }
-        // }
       });
       pusherMemo.channel.bind(Events.USER_PLAY, (data: any) => {
         setPlayerPlay(data.playerNumber, data.play);
@@ -76,6 +58,7 @@ const Room = () => {
     }
   }, [roomId]);
 
+  // Functions that runs when plays are decided
   const playerWin = (player: 0 | 1) => {
     alert(`${players[player].name} WINS!`);
   };
@@ -83,6 +66,7 @@ const Room = () => {
     alert("DRAW!!!");
   };
 
+  // Rock papers scissors logic
   useEffect(() => {
     if (players[0].play && players[1].play) {
       if (players[0].play == players[1].play) {
@@ -109,6 +93,7 @@ const Room = () => {
 
   // TODO: playing against text and disappearing buttons but make selected button enabled
 
+  // On join form submit
   const joinHandler = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setCurrentPlayer(1);
@@ -120,6 +105,7 @@ const Room = () => {
       });
   };
 
+  // Push play to API
   const { mutate: sendPlay } = trpc.gameRouter.play.useMutation();
   const pickPlay = (play: "rock" | "paper" | "scissors") => {
     if (

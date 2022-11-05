@@ -4,10 +4,9 @@ import { customAlphabet } from "nanoid/async";
 import { env } from "../../../env/server.mjs";
 import { Events } from "../../../constants/events";
 
-// const Pusher = require("pusher");
 import Pusher from "pusher";
 
-// TODO: Connect to database for announcing lobby status and limit players
+// TODO: delete games after 24hrs
 
 export const gameRouter = router({
   hello: publicProcedure
@@ -17,13 +16,57 @@ export const gameRouter = router({
         greeting: `Hello ${input?.text ?? "world"}`,
       };
     }),
-  signup: publicProcedure
-    .input(z.object({ name: z.string().max(32) }))
-    .mutation(async ({ input }) => {
-      const nanoid = customAlphabet("1234567890", 6);
-      const roomId = await nanoid();
+  create: publicProcedure
+    .input(
+      z
+        .object({ userId: z.string().nullish(), name: z.string().max(32) })
+        .nullish()
+    )
+    .mutation(async ({ input, ctx: { prisma } }) => {
+      const nanoid = customAlphabet("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 4);
+      const gameId = await nanoid();
+
+      // Create game row
+      const createdGame = await prisma.game.create({
+        data: {
+          gameName: gameId,
+        },
+      });
+
+      // Generate new userId if not exists
+
+      // Find player row, create if none
+      const userId = input?.userId ?? "";
+      const userQuery = await prisma.player.findFirst({
+        where: { id: userId },
+      });
+
+      let createdUser;
+      if (!userQuery) {
+        createdUser = await prisma.player.create({
+          data: {
+            name: input!.name,
+            game: {
+              connect: { id: createdGame.id },
+            },
+          },
+        });
+      } else {
+        await prisma.player.update({
+          where: { id: userId },
+          data: {
+            name: input?.name,
+            score: 0,
+            game: {
+              connect: { id: createdGame.id },
+            },
+          },
+        });
+      }
+
       return {
-        roomId: roomId,
+        userId: createdUser?.id || undefined,
+        gameId: gameId,
       };
     }),
   join: publicProcedure
