@@ -5,7 +5,8 @@ import { env } from "../env/client.mjs";
 import Head from "next/head.js";
 import { useUserStore } from "../utils/userStore";
 import { trpc } from "../utils/trpc";
-import { Events } from "../constants/events";
+import { Events, UserJoinType } from "../constants/events";
+import { eventNames } from "process";
 
 const Game = () => {
   const router = useRouter();
@@ -76,9 +77,25 @@ const Game = () => {
   // Input name screen
   const inputNameScreen = <>INPUT YOUR NAME</>;
   // Waiting for other player screen
-  const waitingOtherPlayerScreen = <>WAITING FOR OTHER PLAYER</>;
+  const waitingOtherPlayerScreen = (
+    <>
+      WAITING FOR OTHER PLAYER
+      <br />
+      {players[0].name ?? "WAITING"}
+      <br />
+      {players[1].name ?? "WAITING"}
+    </>
+  );
   // Game screen
-  const gameScreen = <>Game</>;
+  const gameScreen = (
+    <>
+      Game
+      <br />
+      {players[0].name}
+      <br />
+      {players[1].name}
+    </>
+  );
 
   // On page load
   useEffect(() => {
@@ -149,8 +166,18 @@ const Game = () => {
       setIsPlaying(0);
     }
 
-    // TODO: Other players join event listener
-  }, [gameId, players, spectators]);
+    // Other players join event listener
+    pusherMemo?.channel.bind(Events.USER_JOIN, (data: UserJoinType) => {
+      if (players.length < 2) {
+        setPlayer(1, { userId: data.userId, name: data.name });
+      } else {
+        setSpectators([
+          ...spectators,
+          { userId: data.userId, name: data.name },
+        ]);
+      }
+    });
+  }, [gameId, players, spectators.length]);
 
   // Functions that runs when plays are decided
   const playerWin = (player: 0 | 1) => {

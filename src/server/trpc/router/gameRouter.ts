@@ -3,10 +3,7 @@ import { z } from "zod";
 import { customAlphabet } from "nanoid/async";
 import { env } from "../../../env/server.mjs";
 import { Events } from "../../../constants/events";
-
 import Pusher from "pusher";
-
-// TODO: Delete games after 24hrs
 import { prisma as ctxPrisma } from "../../db/client";
 import { TRPCError } from "@trpc/server";
 
@@ -78,6 +75,7 @@ export const gameRouter = router({
   getInfo: publicProcedure
     .input(z.object({ gameId: z.string().length(4) }))
     .mutation(async ({ input, ctx: { prisma } }) => {
+      // Delete games after 24hrs
       const getDateXDaysAgo = (numOfDays: number, date = new Date()) => {
         const daysAgo = new Date(date.getTime());
 
