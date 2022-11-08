@@ -9,27 +9,34 @@ import { env } from "../env/client.mjs";
 
 const Home: NextPage = () => {
   const router = useRouter();
-  const { players, setPlayer, myName, setMyName, setIsPlaying, clearAll } =
-    useUserStore();
+  const {
+    players,
+    setPlayer,
+    myName,
+    setMyName,
+    setIsPlaying,
+    clearAll,
+    setMyUserId: setUserId,
+  } = useUserStore();
 
   // Clear all past game data
   useEffect(() => {
-    if (localStorage.getItem("lastRoomId")) {
+    if (localStorage.getItem("lastGameId")) {
       const pusher = new Pusher(env.NEXT_PUBLIC_APP_KEY, { cluster: "eu" });
       pusher.unbind_all();
-      pusher.unsubscribe(localStorage.getItem("lastRoomId")!);
+      pusher.unsubscribe(localStorage.getItem("lastGameId")!);
     }
-    localStorage.removeItem("lastRoomId");
+    localStorage.removeItem("lastGameId");
     clearAll();
   }, []);
 
   // On lobby creation
-  const createMutation = trpc.gameRouter.create.useMutation({
+  const createMutation = trpc.gameRouter.createGame.useMutation({
     onSuccess: (data) => {
-      if (data.userId)
-        localStorage.setItem("userId", data.userId);
       setIsPlaying(1);
-
+      localStorage.setItem("userId", data.userId);
+      setUserId(data.userId);
+      setPlayer(0, { userId: data.userId, name: myName, score: 0 });
       router.push(`/${data.gameId}`);
     },
   });
@@ -38,7 +45,7 @@ const Home: NextPage = () => {
   const signupHandler = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const payload = localStorage.getItem("userId") || undefined;
-    createMutation.mutate({ name: myName, userId: payload });
+    if (myName) createMutation.mutate({ name: myName, userId: payload });
   };
 
   return (

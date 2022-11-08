@@ -6,7 +6,65 @@ import { Events } from "../../../constants/events";
 
 import Pusher from "pusher";
 
-// TODO: delete games after 24hrs
+// TODO: Delete games after 24hrs
+import { prisma as ctxPrisma } from "../../db/client";
+import { TRPCError } from "@trpc/server";
+
+// New user function
+const upsertNewUser = async (
+  name: string,
+  gameId: string | undefined,
+  specGameId: string | undefined,
+  userId?: string
+) => {
+  let res;
+  if (userId) {
+    const userQuery = await ctxPrisma.player.findFirst({
+      where: { id: userId },
+    });
+    if (userQuery) {
+      res = await ctxPrisma.player.update({
+        where: { id: userId },
+        data: {
+          name: userQuery.name,
+          score: userQuery.lastGameId == gameId ? userQuery.score : 0,
+          lastGameId: gameId,
+          game: gameId
+            ? {
+                connect: { id: gameId },
+              }
+            : undefined,
+          specGame: specGameId ? { connect: { id: specGameId } } : undefined,
+        },
+      });
+    } else {
+      res = await ctxPrisma.player.create({
+        data: {
+          name: name,
+          game: gameId
+            ? {
+                connect: { id: gameId },
+              }
+            : undefined,
+          specGame: specGameId ? { connect: { id: specGameId } } : undefined,
+        },
+      });
+    }
+  } else {
+    res = await ctxPrisma.player.create({
+      data: {
+        name: name,
+        game: gameId
+          ? {
+              connect: { id: gameId },
+            }
+          : undefined,
+        specGame: specGameId ? { connect: { id: specGameId } } : undefined,
+      },
+    });
+  }
+  return res;
+};
 
 export const gameRouter = router({
   hello: publicProcedure
@@ -16,7 +74,33 @@ export const gameRouter = router({
         greeting: `Hello ${input?.text ?? "world"}`,
       };
     }),
-  create: publicProcedure
+  // Get game info route
+  getInfo: publicProcedure
+    .input(z.object({ gameId: z.string().length(4) }))
+    .mutation(async ({ input, ctx: { prisma } }) => {
+      const getDateXDaysAgo = (numOfDays: number, date = new Date()) => {
+        const daysAgo = new Date(date.getTime());
+
+        daysAgo.setDate(date.getDate() - numOfDays);
+
+        return daysAgo;
+      };
+      await prisma.game.deleteMany({
+        where: { creationDate: { lte: getDateXDaysAgo(1) } },
+      });
+
+      const query = await prisma.game.findFirst({
+        where: { gameName: input.gameId },
+        include: { players: true, spectators: true },
+      });
+      if (!query) {
+        // Return 404
+        throw new TRPCError({ message: "Game not found", code: "NOT_FOUND" });
+      } else {
+        return query;
+      }
+    }),
+  createGame: publicProcedure
     .input(
       z
         .object({ userId: z.string().nullish(), name: z.string().max(32) })
@@ -33,51 +117,34 @@ export const gameRouter = router({
         },
       });
 
-      // Generate new userId if not exists
-
       // Find player row, create if none
-      const userId = input?.userId ?? "";
+      const userId: string = input?.userId ?? "";
       const userQuery = await prisma.player.findFirst({
         where: { id: userId },
       });
 
-      let createdUser;
-      if (!userQuery) {
-        createdUser = await prisma.player.create({
-          data: {
-            name: input!.name,
-            game: {
-              connect: { id: createdGame.id },
-            },
-          },
-        });
-      } else {
-        await prisma.player.update({
-          where: { id: userId },
-          data: {
-            name: input?.name,
-            score: 0,
-            game: {
-              connect: { id: createdGame.id },
-            },
-          },
-        });
-      }
+      const dbUser = await upsertNewUser(
+        input?.name!,
+        createdGame.id,
+        undefined,
+        userId
+      );
 
       return {
-        userId: createdUser?.id || undefined,
+        userId: dbUser?.id,
         gameId: gameId,
       };
     }),
+  // Joining game route
   join: publicProcedure
     .input(
       z.object({
+        userId: z.string().nullish(),
         name: z.string().max(32),
-        roomId: z.string().length(6),
-        currentPlayer: z.number().min(0).max(1),
+        gameId: z.string().length(4),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx: { prisma } }) => {
       const pusher = new Pusher({
         appId: env.APP_ID,
         key: env.NEXT_PUBLIC_APP_KEY,
@@ -85,17 +152,41 @@ export const gameRouter = router({
         cluster: "eu",
         useTLS: true,
       });
-      await pusher.trigger(input.roomId, Events.USER_JOIN, {
+
+      // Find player row, create if none
+      const userId = input?.userId ?? "";
+      const gameQuery = await prisma.game.findFirst({
+        where: { id: input.gameId },
+        include: { players: true, spectators: true },
+      });
+
+      let dbUser;
+      if (gameQuery) {
+        dbUser = await upsertNewUser(
+          input.name,
+          gameQuery.players.length < 2 ? input.gameId : undefined,
+          gameQuery.players.length >= 2 ? input.gameId : undefined,
+          userId
+        );
+      } else {
+        // Return 404
+        throw new TRPCError({ message: "Game not found", code: "NOT_FOUND" });
+      }
+
+      // Push join event
+      await pusher.trigger(input.gameId, Events.USER_JOIN, {
+        userId: dbUser?.id,
         name: input.name,
-        playerNumber: input.currentPlayer,
       });
     }),
+  // Send play route
   play: publicProcedure
     .input(
       z.object({
+        userId: z.string(),
         name: z.string().max(32),
-        roomId: z.string().length(6),
-        currentPlayer: z.number().min(0).max(1),
+        gameId: z.string().length(4),
+        isPlaying: z.number().min(0).max(1),
         play: z.enum(["rock", "paper", "scissors"]),
       })
     )
@@ -107,9 +198,9 @@ export const gameRouter = router({
         cluster: "eu",
         useTLS: true,
       });
-      await pusher.trigger(input.roomId, Events.USER_PLAY, {
+      await pusher.trigger(input.gameId, Events.USER_PLAY, {
         name: input.name,
-        playerNumber: input.currentPlayer,
+        playerNumber: input.isPlaying,
         play: input.play,
       });
     }),
