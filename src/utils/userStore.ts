@@ -48,8 +48,9 @@ export const useUserStore = create<UserStoreType>((set) => ({
       const newPlayers = s.players;
       Object.entries(data).forEach((entry) => {
         const [key, value] = entry;
+        // eslint-disable-next-line
         // @ts-ignore
-        newPlayers[player][key as keyof Player] = value;
+        newPlayers[player][key] = value;
       });
       return { players: newPlayers };
     }),

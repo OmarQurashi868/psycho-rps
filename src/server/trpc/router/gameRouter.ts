@@ -122,7 +122,7 @@ export const gameRouter = router({
       });
 
       const dbUser = await upsertNewUser(
-        input?.name!,
+        input?.name || "Default Name",
         createdGame.id,
         undefined,
         userId

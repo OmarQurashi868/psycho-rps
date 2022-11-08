@@ -39,7 +39,7 @@ const Game = () => {
     trpc.gameRouter.getInfo.useMutation({
       onSuccess: (data) => {
         console.log(data);
-        localStorage.setItem("lastGameId", data?.gameName!);
+        localStorage.setItem("lastGameId", data?.gameName);
         if (data?.players[0]) {
           setPlayer(0, {
             name: data.players[0].name,
@@ -54,8 +54,8 @@ const Game = () => {
             score: data.players[1].score || 0,
           });
         }
-        if (data?.spectators.length! > 0) {
-          setSpectators(data?.spectators!);
+        if (data?.spectators.length > 0) {
+          setSpectators(data?.spectators);
         }
         console.log(players);
       },
@@ -220,7 +220,7 @@ const Game = () => {
     if (typeof gameId == "string" && isPlaying != 0 && myUserId)
       sendPlay({
         userId: myUserId,
-        name: players[isPlaying - 1]?.name!,
+        name: players[isPlaying - 1]?.name || "Default Name",
         isPlaying: isPlaying - 1,
         gameId: gameId,
         play,
