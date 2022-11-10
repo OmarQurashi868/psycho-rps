@@ -7,7 +7,7 @@ import Pusher from "pusher";
 import { prisma as ctxPrisma } from "../../db/client";
 import { TRPCError } from "@trpc/server";
 
-// New user function
+// Update or insert user function
 const upsertNewUser = async (
   name: string,
   gameId: string | undefined,
@@ -23,7 +23,7 @@ const upsertNewUser = async (
       res = await ctxPrisma.player.update({
         where: { id: userId },
         data: {
-          name: userQuery.name,
+          name: name,
           score: userQuery.lastGameId == gameId ? userQuery.score : 0,
           lastGameId: gameId,
           game: gameId
@@ -38,6 +38,7 @@ const upsertNewUser = async (
       res = await ctxPrisma.player.create({
         data: {
           name: name,
+          score: gameId ? 0 : undefined,
           game: gameId
             ? {
                 connect: { id: gameId },
@@ -51,6 +52,7 @@ const upsertNewUser = async (
     res = await ctxPrisma.player.create({
       data: {
         name: name,
+        score: gameId ? 0 : undefined,
         game: gameId
           ? {
               connect: { id: gameId },
@@ -73,7 +75,7 @@ export const gameRouter = router({
     }),
   // Get game info route
   getInfo: publicProcedure
-    .input(z.object({ gameId: z.string().length(4) }))
+    .input(z.object({ gameName: z.string().length(4) }))
     .mutation(async ({ input, ctx: { prisma } }) => {
       // Delete games after 24hrs
       const getDateXDaysAgo = (numOfDays: number, date = new Date()) => {
@@ -88,7 +90,7 @@ export const gameRouter = router({
       });
 
       const query = await prisma.game.findFirst({
-        where: { gameName: input.gameId },
+        where: { gameName: input.gameName },
         include: { players: true, spectators: true },
       });
       if (!query) {
@@ -116,11 +118,9 @@ export const gameRouter = router({
       });
 
       // Find player row, create if none
-      const userId: string = input?.userId ?? "";
-      const userQuery = await prisma.player.findFirst({
-        where: { id: userId },
-      });
+      const userId = input?.userId ?? undefined;
 
+      // estlint-ignore
       const dbUser = await upsertNewUser(
         input?.name || "Default Name",
         createdGame.id,
@@ -139,7 +139,7 @@ export const gameRouter = router({
       z.object({
         userId: z.string().nullish(),
         name: z.string().max(32),
-        gameId: z.string().length(4),
+        gameName: z.string().length(4),
       })
     )
     .mutation(async ({ input, ctx: { prisma } }) => {
@@ -154,7 +154,7 @@ export const gameRouter = router({
       // Find player row, create if none
       const userId = input?.userId ?? "";
       const gameQuery = await prisma.game.findFirst({
-        where: { id: input.gameId },
+        where: { gameName: input.gameName },
         include: { players: true, spectators: true },
       });
 
@@ -162,8 +162,8 @@ export const gameRouter = router({
       if (gameQuery) {
         dbUser = await upsertNewUser(
           input.name,
-          gameQuery.players.length < 2 ? input.gameId : undefined,
-          gameQuery.players.length >= 2 ? input.gameId : undefined,
+          gameQuery.players.length < 2 ? gameQuery.id : undefined,
+          gameQuery.players.length >= 2 ? gameQuery.id : undefined,
           userId
         );
       } else {
@@ -171,11 +171,20 @@ export const gameRouter = router({
         throw new TRPCError({ message: "Game not found", code: "NOT_FOUND" });
       }
 
-      // Push join event
-      await pusher.trigger(input.gameId, Events.USER_JOIN, {
-        userId: dbUser?.id,
-        name: input.name,
+      const newGameQuery = await prisma.game.findFirst({
+        where: { gameName: input.gameName },
+        include: { players: true, spectators: true },
       });
+      if (!newGameQuery) {
+        // Return 404
+        throw new TRPCError({ message: "Game not found", code: "NOT_FOUND" });
+      } else {
+        // Push join event
+        await pusher.trigger(input.gameName, Events.USER_JOIN, {
+          game: newGameQuery
+        });
+        return { ...newGameQuery, userId: dbUser.id };
+      }
     }),
   // Send play route
   play: publicProcedure

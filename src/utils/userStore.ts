@@ -27,8 +27,8 @@ type UserStoreType = {
   incrementPlayerScore: (player: 0 | 1) => void;
   clearPlayerScore: (player: 0 | 1) => void;
 
-  isPlaying: 0 | 1 | 2;
-  setIsPlaying: (isPlaying: 0 | 1 | 2) => void;
+  isPlaying: -1 | 0 | 1 | 2;
+  setIsPlaying: (isPlaying: -1 | 0 | 1 | 2) => void;
 
   myName: string | undefined;
   setMyName: (name: string | undefined) => void;
@@ -88,8 +88,8 @@ export const useUserStore = create<UserStoreType>((set) => ({
       return { players: newPlayers };
     }),
 
-  isPlaying: 1,
-  setIsPlaying: (player: 0 | 1 | 2) => set({ isPlaying: player }),
+  isPlaying: -1,
+  setIsPlaying: (player: -1 | 0 | 1 | 2) => set({ isPlaying: player }),
   playersPlays: { 1: undefined, 2: undefined },
 
   myName: "Default Name",

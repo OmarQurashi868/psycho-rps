@@ -1,5 +1,5 @@
 import { useRouter } from "next/router";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Pusher from "pusher-js";
 import { env } from "../env/client.mjs";
 import Head from "next/head.js";
@@ -24,6 +24,7 @@ const Game = () => {
     spectators,
     setSpectators,
   } = useUserStore();
+  const [isLoading, setIsLoading] = useState(true);
 
   // Connect websocket pusher
   const pusherMemo = useMemo(() => {
@@ -35,35 +36,58 @@ const Game = () => {
   }, [gameId]);
 
   // Mutations
-  const { mutate: getInfo, isLoading: getInfoLoading } =
-    trpc.gameRouter.getInfo.useMutation({
-      onSuccess: (data) => {
-        console.log(data);
-        localStorage.setItem("lastGameId", data?.gameName);
-        if (data?.players[0]) {
-          setPlayer(0, {
-            name: data.players[0].name,
-            userId: data.players[0].id,
-            score: data.players[0].score || 0,
-          });
-        }
-        if (data?.players[1]) {
-          setPlayer(0, {
-            name: data.players[1].name,
-            userId: data.players[1].id,
-            score: data.players[1].score || 0,
-          });
-        }
-        if (data?.spectators.length > 0) {
-          setSpectators(data?.spectators);
-        }
-        console.log(players);
-      },
-      onError: () => {
-        router.push("/");
-      },
-    });
-  const { mutate: join } = trpc.gameRouter.join.useMutation();
+  const { mutate: getInfo } = trpc.gameRouter.getInfo.useMutation({
+    onSuccess: (data) => {
+      localStorage.setItem("lastGameId", data?.gameName);
+      console.log(data)
+      if (data?.players[0]) {
+        setPlayer(0, {
+          name: data.players[0].name,
+          userId: data.players[0].id,
+          score: data.players[0].score || 0,
+        });
+      }
+      if (data?.players[1]) {
+        setPlayer(0, {
+          name: data.players[1].name,
+          userId: data.players[1].id,
+          score: data.players[1].score || 0,
+        });
+      }
+      if (data?.spectators.length > 0) {
+        setSpectators(data?.spectators);
+      }
+      setIsLoading(false);
+    },
+    onError: () => {
+      router.push("/");
+    },
+  });
+  const { mutate: join } = trpc.gameRouter.join.useMutation({
+    onSuccess: (data) => {
+      localStorage.setItem("lastGameId", data?.gameName);
+      localStorage.setItem("userId", data.userId);
+      setMyUserId(data.userId);
+      if (data?.players[0]) {
+        setPlayer(0, {
+          name: data.players[0].name,
+          userId: data.players[0].id,
+          score: data.players[0].score || 0,
+        });
+      }
+      if (data?.players[1]) {
+        setPlayer(0, {
+          name: data.players[1].name,
+          userId: data.players[1].id,
+          score: data.players[1].score || 0,
+        });
+      }
+      if (data?.spectators.length > 0) {
+        setSpectators(data?.spectators);
+      }
+      setIsLoading(false);
+    },
+  });
   const { mutate: sendPlay } = trpc.gameRouter.play.useMutation();
 
   // On join form submit
@@ -73,7 +97,8 @@ const Game = () => {
   };
 
   // TODO: UI for different page states
-  let content = <>LOADING</>;
+  // Loading screen
+  const loadingScreen = <>LOADING...</>;
   // Input name screen
   const inputNameScreen = <>INPUT YOUR NAME</>;
   // Waiting for other player screen
@@ -96,88 +121,113 @@ const Game = () => {
       {players[1].name}
     </>
   );
+  const [content, setContent] = useState(waitingOtherPlayerScreen);
+
+  // Function to check if spectator already exists in array
+  const spectatorExists = (userId: string | undefined) => {
+    if (!userId) return false;
+    let count = 0;
+    spectators.forEach((e) => {
+      if (e.userId == userId) {
+        count++;
+      }
+    });
+    return count > 0;
+  };
 
   // On page load
   useEffect(() => {
     setMyUserId(localStorage.getItem("userId") || undefined);
     // Get game info
-    getInfo({
-      gameId: typeof gameId == "string" ? gameId : "",
-    });
+    if (gameId && typeof gameId == "string")
+      getInfo({
+        gameName: gameId,
+      });
+    setIsLoading(true);
+    console.log(players)
+    console.log("useeffect")
     // Joining as player or spectator logic
     if (!players[0].userId || !players[1].userId) {
+      console.log("player spot open check")
       // Check if current user already exists
-      if (players[0].userId == myUserId || players[1].userId == myUserId) {
+      if (
+        (players[0].userId != undefined && players[0].userId == myUserId) ||
+        (players[1].userId != undefined && players[1].userId == myUserId)
+      ) {
+        console.log("user already exists")
         // Show waiting for other player screen
-        content = waitingOtherPlayerScreen;
+        setContent(waitingOtherPlayerScreen);
       } else if (!players[0].userId) {
+        console.log("joining as player 1")
         // Join as player 1
-        if (localStorage.getItem("lastGameId") == gameId) {
-          // Join as same user
-          // Mutate join with userId and name
+        if (localStorage.getItem("lastGameId") != gameId) {
+          // TODO: Ask for name
+        }
+        // Mutate Join
+        if (typeof gameId == "string")
           join({
             userId: myUserId,
             name: myName || "Default Name",
-            gameId: gameId,
+            gameName: gameId,
           });
-        } else {
-          // Join as new user
-          // TODO: Ask for name
-          // Mutate join with new name
-          if (typeof gameId == "string")
-            join({
-              userId: myUserId,
-              name: myName || "Default Name",
-              gameId: gameId,
-            });
-        }
         setIsPlaying(1);
       } else if (!players[1].userId) {
+        console.log("joining as player 2")
         // Join as player 2
-        if (localStorage.getItem("lastGameId") == gameId) {
-          // Join as same user
-          // Mutate join with userId and name
+        if (localStorage.getItem("lastGameId") != gameId) {
+          // TODO: Ask for name
+        }
+        // Mutate join
+        if (typeof gameId == "string")
           join({
             userId: myUserId,
             name: myName || "Default Name",
-            gameId: gameId,
+            gameName: gameId,
           });
-        } else {
-          // Join as new user
-          // TODO: Ask for name
-          // Mutate join with new name
-          if (typeof gameId == "string")
-            join({
-              userId: myUserId,
-              name: myName || "Default Name",
-              gameId: gameId,
-            });
-        }
+
         setIsPlaying(2);
       }
-    } else {
-      // Spectate
+    } else if (!spectatorExists(myUserId)) {
+      console.log("player spot full")
+      setContent(gameScreen);
+      // Spectate if user is not already spectating
+      if (localStorage.getItem("lastGameId") != gameId) {
+        // TODO: Ask for name
+      }
       if (typeof gameId == "string")
         join({
           userId: myUserId,
           name: myName || "Default Name",
-          gameId: gameId,
+          gameName: gameId,
         });
       setIsPlaying(0);
     }
 
     // Other players join event listener
     pusherMemo?.channel.bind(Events.USER_JOIN, (data: UserJoinType) => {
-      if (players.length < 2) {
-        setPlayer(1, { userId: data.userId, name: data.name });
-      } else {
-        setSpectators([
-          ...spectators,
-          { userId: data.userId, name: data.name },
-        ]);
+      if (data?.game?.players[0]) {
+        setPlayer(0, {
+          name: data.game.players[0].name,
+          userId: data.game.players[0].id,
+          score: data.game.players[0].score || 0,
+        });
       }
+      if (data?.game?.players[1]) {
+        setPlayer(0, {
+          name: data.game.players[1].name,
+          userId: data.game.players[1].id,
+          score: data.game.players[1].score || 0,
+        });
+      }
+      if (data?.game?.spectators.length > 0) {
+        setSpectators(data?.game?.spectators);
+      }
+      if (gameId && typeof gameId == "string")
+        getInfo({
+          gameName: gameId,
+        });
     });
-  }, [gameId, players, spectators.length]);
+  }, [gameId, players[0], players[1], spectators, myName]);
 
   // Functions that runs when plays are decided
   const playerWin = (player: 0 | 1) => {
@@ -251,7 +301,7 @@ const Game = () => {
             d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"
           />
         </svg>
-        {content}
+        {isLoading ? loadingScreen : content}
       </main>
     </>
   );

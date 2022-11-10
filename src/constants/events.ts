@@ -3,7 +3,17 @@ export enum Events {
   USER_PLAY = "play",
 }
 
-export type UserJoinType = {
-  userId: string;
+type Player = {
+  id: string;
   name: string;
+  score?: number;
+};
+
+export type UserJoinType = {
+  game: {
+    id: string;
+    gameName: string;
+    players: Player[];
+    spectators: Player[];
+  };
 };
